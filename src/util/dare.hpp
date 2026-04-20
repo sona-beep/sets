@@ -8,6 +8,7 @@
 // #include "drake/common/is_approx_equal_abstol.h"
 // #include "drake/systems/primitives/linear_system_internal.h"
 
+//离散代数Riccati方程求解器，输入系统矩阵A，B，状态权重矩阵Q，输入权重矩阵R，输出代数Riccati方程的解P
 
 Eigen::MatrixXd DiscreteAlgebraicRiccatiEquation(
     const Eigen::Ref<const Eigen::MatrixXd>& A,

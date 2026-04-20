@@ -13,6 +13,7 @@
 
 #include "solver.hpp"
 
+//均匀离散化的预测采样，action空间离散化，时间维度完全展开，每个节点只采样一个action序列进行扩展
 
 class UD_PS : public Solver {
 

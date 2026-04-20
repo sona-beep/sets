@@ -7,7 +7,7 @@
 #include <vector>
 
 // #include <spdlog/spdlog.h>
-
+//有限差分求梯度，雅可比矩阵，海森矩阵
 
 namespace fd {
 

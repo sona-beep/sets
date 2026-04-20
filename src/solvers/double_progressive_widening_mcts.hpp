@@ -13,6 +13,7 @@
 
 #include "solver.hpp"
 
+//双重渐进拓宽的mcts，action和时间维度都不完全展开，逐渐增加分支和时间步长
 
 class DPW_MCTS : public Solver {
 

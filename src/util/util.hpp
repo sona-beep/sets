@@ -10,7 +10,10 @@
 #include "fd.hpp"
 #include "dare.hpp"
 
+//基础数据结构和通用辅助库
 
+
+//随机数接口
 class RNG {
 
     public: 
@@ -34,7 +37,7 @@ class RNG {
         std::normal_distribution<double> m_normal_dist; 
     };
 
-
+//数据流结构体，xs,us, rs分别是状态、动作、奖励序列
 struct Trajectory {
     std::vector<Eigen::VectorXd> xs;
     std::vector<Eigen::VectorXd> us;
@@ -43,7 +46,7 @@ struct Trajectory {
     double value; 
 };
 
-
+//递归数据结构体，存储每个分支的线性化数据，特定分支数据，以及公共分支数据
 struct BranchData {
     Eigen::VectorXd x0;
     std::vector<std::vector<Eigen::VectorXd>> xbarss;

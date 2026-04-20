@@ -13,6 +13,7 @@
 
 #include "solver.hpp"
 
+//抛弃树结构，直接在根节点采样N条action序列，扩展成N条轨迹，选择价值最高的轨迹对应的第一步动作
 
 class SE_PS : public Solver {
 

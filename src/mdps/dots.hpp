@@ -8,7 +8,8 @@
 #include <random>
 #include <Eigen/Dense>
 #include <yaml-cpp/yaml.h>
-
+#include <numeric>
+#include <string>
 #include "mdp.hpp"
 #include "sixdofaircraft.hpp"
 #include "../util/util.hpp"

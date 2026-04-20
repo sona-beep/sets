@@ -3,9 +3,17 @@
 #include <vector>
 #include <random>
 #include <Eigen/Dense>
-
+#include <numeric>
 #include "../util/util.hpp"
 
+/*
+整个系统的骨架，定义了马尔可夫决策过程（MDP）的标准接口。
+核心逻辑：
+
+定义了状态空间、动作空间的抽象约束（state_dim(), action_dim(), X(), U()）。
+定义了环境动力学函数 F() 和奖励函数 R() 的纯虚接口。
+
+*/
 
 class MDP {
 

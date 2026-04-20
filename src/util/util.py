@@ -11,6 +11,7 @@ import numpy as np
 import scipy 
 from queue import Queue, Empty
 
+#python调度端的数据处理，包括数据平滑，数据子采样，数据分割，以及一些文件读写的工具函数
 
 def smooth_xs(xs_np, window_size, skip_idxs=[]):
     # xs is (num_timesteps, state_dim) (hopefully)

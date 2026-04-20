@@ -10,6 +10,19 @@
 // #include "../learning/feedforward.hpp"
 
 
+/*
+物理引擎（动力学与气动解算）
+这是整个项目的计算核心。它继承自 MDP，完整实现了一个 6 自由度（6-DOF）刚体飞行器的运动学与动力学。
+核心逻辑：
+状态与动作空间：定义了 13 维状态向量 
+$x = [p_x, p_y, p_z, v_x, v_y, v_z, \phi, \theta, \psi, p, q, r, t]$
+（位置、线速度、欧拉角、角速度、时间）。
+支持三种飞行模式（固定翼、四旋翼、过渡态），动作维度可变（3维到8维）。
+积分器设计：在 F() 函数中，采用了带有 m_control_hold 的显式欧拉积分（Explicit Euler Integration）。
+通过多次小步长迭代来逼近连续动力学。
+*/
+
+
 class SixDOFAircraft : public MDP {
 
     public:
@@ -21,11 +34,13 @@ class SixDOFAircraft : public MDP {
             std::cout << "C_Y: " << aero_coeffs[3] << std::endl;
             std::cout << "C_l: " << aero_coeffs[4] << std::endl;
             std::cout << "C_n: " << aero_coeffs[5] << std::endl; }
+        //打印输入的六个气动系数
 
 
         std::string name() override {
             return "SixDOFAircraft";
         }
+        //name
 
 
         std::vector<int> velocity_idxs() override {
@@ -33,6 +48,7 @@ class SixDOFAircraft : public MDP {
             std::vector<int> idxs{ 3, 4, 5, 9, 10, 11 };
             return idxs;
         }
+        //返回状态向量中速度相关分量的索引
 
 
         std::vector<int> position_idxs() override {
@@ -40,10 +56,12 @@ class SixDOFAircraft : public MDP {
             std::vector<int> idxs{ 0, 1, 2, 6, 7, 8 };
             return idxs;
         }
+        //位置索引
 
         std::vector<int> my_idxs() override {
             return m_my_idxs;
         }
+        //·自定义状态分量索引
 
 
         SixDOFAircraft(std::string mdp_config_path) {
@@ -62,7 +80,7 @@ class SixDOFAircraft : public MDP {
                 m_flight_mode = 2;
             } else { 
                 throw std::logic_error("flight mode not recognized");
-            }
+            } // 飞行模式设置
 
             std::string wind_mode = config["wind_mode"].as<std::string>();
             if (wind_mode == "empty") {
@@ -73,7 +91,7 @@ class SixDOFAircraft : public MDP {
                 m_wind_mode = 2;
             } else {
                 throw std::logic_error("wind mode not recognized");
-            }
+            } //风场模式设置
 
             std::string aero_mode = config["aero_mode"].as<std::string>();
             if (aero_mode == "empty") {
@@ -92,7 +110,7 @@ class SixDOFAircraft : public MDP {
                 m_aero_mode = 6;
             } else {
                 throw std::logic_error("aero mode not recognized");
-            }
+            } //气动模式设置
 
             std::string reward_mode = config["reward_mode"].as<std::string>();
             if (reward_mode == "regulation") {
@@ -103,9 +121,10 @@ class SixDOFAircraft : public MDP {
                 m_reward_mode = 2;
             } else {
                 throw std::logic_error("reward mode not recognized");
-            }
+            } // 奖励模式设置
 
             if (m_verbose) { std::cout << "setting system modes ok" <<  std::endl;}
+
 
             // x = [px, py, pz, vx, vy, vz, phi, theta, psi, p, q, r, t] 
             // positions are in global frame 
@@ -133,6 +152,7 @@ class SixDOFAircraft : public MDP {
             m_wind_duty_cycle = config["wind_duty_cycle"].as<double>();
             
             if (m_verbose) { std::cout << "setting system specific param ok" <<  std::endl;}
+            // 系统参数设置
 
             if (m_reward_mode == 2) {
                 m_obs_cone_angle = config["obs_cone_angle"].as<double>();
@@ -140,6 +160,7 @@ class SixDOFAircraft : public MDP {
                 m_obs_min_speed = config["obs_min_speed"].as<double>();
             }
             if (m_verbose) { std::cout << "setting observation model param ok" <<  std::endl;}
+            // 观测模型参数
 
             m_neural_thermal_scale = config["neural_thermal_scale"].as<double>();
 
@@ -298,6 +319,7 @@ class SixDOFAircraft : public MDP {
 
         Eigen::VectorXd initial_state() override { return m_x0; }
 
+        // 动态障碍物计算：根据当前时间步和障碍物速度，更新障碍物包围盒
         Eigen::MatrixXd compute_dynamic_obstacle(const Eigen::MatrixXd & obstacle, int timestep) {
             Eigen::MatrixXd dynamic_obstacle = obstacle; // copy
             double duration = (timestep - obstacle(timestep_idx(),0)) * dt();
@@ -306,6 +328,7 @@ class SixDOFAircraft : public MDP {
                 (obstacle(1,0) + obstacle(1,1)) / 2 + obstacle(4,0) * duration,
                 (obstacle(2,0) + obstacle(2,1)) / 2 + obstacle(5,0) * duration
             };
+            //更新障碍物包围盒的中心和范围
             dynamic_obstacle(0,0) = dynamic_obstacle_center(0) - (obstacle(0,1) - obstacle(0,0))/2; 
             dynamic_obstacle(0,1) = dynamic_obstacle_center(0) + (obstacle(0,1) - obstacle(0,0))/2;
             dynamic_obstacle(1,0) = dynamic_obstacle_center(1) - (obstacle(1,1) - obstacle(1,0))/2; 

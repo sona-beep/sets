@@ -13,6 +13,7 @@
 
 #include "solver.hpp"
 
+//基础对照组，网格离散化的mcts
 
 
 std::vector<Eigen::VectorXd> makeActionSet(Eigen::MatrixXd const & U, int action_dim, int num_points_per_dimension) {

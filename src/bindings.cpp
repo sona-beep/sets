@@ -11,6 +11,7 @@
 
 #include "mdps/sixdofaircraft.hpp"
 #include "mdps/game_sixdofaircraft.hpp"
+#include "mdps/plane_missile_escape.hpp"
 
 #include "solvers/solver.hpp"
 #include "solvers/uct.hpp"
@@ -24,7 +25,7 @@
 
 #include "util/util.hpp"
 
-
+//连接c++和python的接口，python调用c++的mdp和solver
 MDP* get_mdp(std::string mdp_name, std::string config_path) {
     YAML::Node config = YAML::LoadFile(config_path);    
     MDP* mdp;
@@ -32,6 +33,8 @@ MDP* get_mdp(std::string mdp_name, std::string config_path) {
         mdp = new SixDOFAircraft(config_path);
     } else if (mdp_name == "GameSixDOFAircraft") {
         mdp = new GameSixDOFAircraft(config_path);
+    } else if (mdp_name == "PlaneMissileEscape") {
+        mdp = new PlaneMissileEscape(config_path);
     } else {
         std::cout << "Unknown system: " << mdp_name << std::endl;
         exit(1); }
@@ -383,4 +386,3 @@ PYBIND11_MODULE(bindings, m) {
         .def_readwrite("wct_dots_tmp", &WallClockTimeData::wct_dots_tmp);
 
 }
-
