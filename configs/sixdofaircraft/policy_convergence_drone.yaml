@@ -1,0 +1,202 @@
+ # YAML-only quadrotor configuration tuned for stable runtime behavior
+ config_name: "policy_convergence"
+ config_path: "../configs/sixdofaircraft/policy_convergence_drone.yaml"
+ # modes
+ flight_mode: "quadrotor" # ["quadrotor", "fixed_wing", "transition"]
+ aero_mode: "empty" # ["empty", "linear", "nonlinear"]
+ wind_mode: "empty" # ["empty", "thermal"]
+ reward_mode: "regulation" # ["regulation", "observation"]
+ target_special_idxs: []
+ targets: [ [  120.0,  120.0, -120.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], ]
+ ground_mdp_H: 12000
+ reward_parameters: [0.05, 0.9, 0.00025, 0.0, 0.1, 0.05, 1.0]
+ ground_mdp_V_alive: 0.0 # order of depth of tree search 
+ # conservative multirotor rigid-body parameters
+ mass: 2.0 # kg
+ gravity: 9.8 # m / s^2
+ Ixx: 0.03 # kg m^2
+ Ixz: 0.0 # kg m^2
+ Iyy: 0.03 # kg m^2
+ Izx: 0.0 # kg m^2
+ Izz: 0.05 # kg m^2
+ ground_mdp_name: "SixDOFAircraft"
+ ground_mdp_verbose: False
+ ground_mdp_state_labels: ["p_x", "p_y", "p_z", "v_x", "v_y", "v_z", "phi", "theta", "psi", "p", "q", "r", "time"]
+ ground_mdp_control_labels: ["unused_0", "unused_1", "unused_2", "thrust_z", "tau_x", "tau_y", "tau_z", "unused_7"]
+ ground_mdp_dt: 0.01
+ ground_mdp_control_hold: 1
+ ground_mdp_x0: [  -120.0, -120.0, -120.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] 
+ ground_mdp_xd: [   120.0, 120.0, -120.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] 
+ ground_mdp_X: [
+    # (px, py, pz)_[m], (vx, vy, vz)_[m/s], (roll, pitch, yaw)_[rad], (rollrate, pitchrate, yawrate)_[rad/s], time 
+  -250.0, -250.0, -200.0, -12.0, -12.0, -12.0, -1.2, -1.2, -3.2, -8.0, -8.0, -6.0, 0.0,
+   250.0,  250.0,  -1.0,  12.0,  12.0,  12.0,  1.2,  1.2,  3.2,  8.0,  8.0,  6.0, 100000000.0 ]
+ ground_mdp_special_obstacle_idxs: []
+ ground_mdp_special_obstacle_radius: 0.8
+ # 每个障碍物按 13x2 矩阵展平存储，前 3 行分别是 x/y/z 的 [min, max]。
+ # 这里放两个静态障碍区，中心位于起点到目标的连线上，但和起点、目标保持明显间隔。
+ ground_mdp_obstacles: [
+  [
+   -57.0, -57.0, -140.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+   -33.0, -33.0, -100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 100000000.0
+  ],
+  [
+    33.0,  33.0, -140.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+    57.0,  57.0, -100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 100000000.0
+  ]
+ ]
+ ground_mdp_U: [ 
+  # unused, unused, unused, thrust_z, tau_x, tau_y, tau_z, unused
+   0.0,  0.0,  0.0,   0.0, -1.2, -1.2, -0.6,  0.0,
+   0.0,  0.0,  0.0,  50.0,  1.2,  1.2,  0.6,  0.0] # N / Nm
+ ground_mdp_gamma: 1.0
+ # 水平位置权重继续降低，高度和竖直速度权重继续提高。
+ # 目标是让规划更明确地把“保高度”放在“快到目标”之前。
+ ground_mdp_Qx: [ 45.0, 45.0, 60.0, 18.0, 18.0, 70.0, 24.0, 24.0, 4.0, 14.0, 14.0, 8.0, 0.0] 
+ ground_mdp_Qx_equ: [ 0.0, 0.0, 20.0, 6.0, 6.0, 24.0, 12.0, 12.0, 2.0, 12.0, 12.0, 5.0, 0.0]
+ ground_mdp_Qf: [ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] 
+ # 明显降低 thrust_z 代价，让系统愿意在倾斜飞行时主动补推力抵消重力损失；
+ # 扭矩代价保持高位，防止通过大姿态角换取水平速度。
+ ground_mdp_Qu: [ 0.0, 0.0, 0.0, 0.15, 24.0, 24.0, 16.0, 0.0]
+ Xs_thermal: [
+  [
+   -1500, -1500, -750.2, -600.0, -600.0, -600.0, -2.0, -2.0, -10.0, -50.0, -50.0, -50.0, 0.0,
+   -750, -750, -0.2,  600.0,  600.0,  600.0,  2.0,  2.0,  10.0,  50.0,  50.0,  50.0, 100000000.0 
+  ]
+ ]
+ Vs_thermal: [
+  [
+    # (fx, fy, fz)_[N], (tau_x, tau_y, tau_z)_[Nm]
+    0.0, 0.0, -100.0, 0.0, 0.0, 0.0
+  ]
+ ]
+ wind_duty_cycle: 1.0
+ wind_period: 500
+ #########
+ rollout_mode: "uct" 
+ #########
+ dots_expansion_mode: "SpectralSearch"
+ # 用 stabilization 代替 empty_control：在线性化参考里显式压姿态、压竖直速度并维持初始高度。
+ dots_initialize_mode: "stabilization" # "thermal_compensation", "closest_equillibrium", "empty_control", "random_trajectory"
+ # 先关闭 greedy 特殊动作；它会直接朝目标拉速度，但没有显式的高度保持目标，容易在巡航后段累积掉高。
+ dots_special_actions: ["empty"]
+ dots_num_branches: 30
+ dots_spectral_branches_mode: "my_idxs"
+ my_idxs: [0,1,3,4,6,7,9,10]
+ dots_control_mode: "closed_loop_discrete"
+ dots_scale_mode: "empty"
+ dots_verbose: False
+ # 再缩短单次执行段，避免在较长区间里持续掉高或持续维持大倾角。
+ dots_decision_making_horizon: 60
+ dots_dynamics_horizon: 20
+ # 进一步减小朝目标猛冲的趋势，优先保持平稳和高度。
+ dots_greedy_rate: 0.9 
+ dots_greedy_min_dist: 0.15 
+ # (px, py, pz, vx, vy, vz, roll pitch yaw, rollrate, pitchrate, yawrate, time)
+ dots_modal_damping_mode: "damp_displacement_between_systems"
+ # 对 z / vz 重新加大阻尼，抑制巡航过程中缓慢下沉；
+ # 姿态和角速度仍保持高阻尼，限制大幅俯仰/横滚。
+ dots_modal_damping_gains: [0.5, 0.5, 0.82, 0.65, 0.65, 0.82, 0.82, 0.82, 0.7, 0.82, 0.82, 0.72] 
+ # dots_rho: 1.0 
+ dots_rho: [ 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0] 
+ dots_greedy_gain: 0.2 
+ dots_baseline_mode_on: false
+ dots_num_discrete_actions: 4
+ #########
+ uct_mode : "no_cbds"
+ uct_downsample_traj_on : True
+ uct_N : 20000
+ uct_max_depth : 12
+ uct_mpc_depth : 2
+ uct_c : 3.0
+ uct_dt : 0.01 # sec
+ uct_wct : 1200.0 # sec
+ uct_export_topology : False
+ uct_export_node_states : False
+ uct_export_trajs : True
+ uct_export_cbdsbds : False
+ uct_export_tree_statistics : False
+ uct_heuristic_mode: "shuffled" # ["sorted", "shuffled"]
+ uct_tree_exploration: "uct" # ["uct", "puct"]
+ uct_verbose : False
+ #########
+ neural_thermal_scale: 0.7 # 0.6 kills scp (and no lower value does)
+ # 
+ max_alpha: 0.33 # rad 
+ max_beta:  0.33 # rad 
+ # linear aero model 
+ rho: 1.268 # kg / m^3
+ S: 0.55 # m^2, planform area of the wing surface
+ b: 2.90 # m, wing span 
+ c: 0.19 # m, length of the mean aerodynamic chord 
+ # observation model 
+ obs_cone_length: 80.0 # unused for regulation mode
+ obs_cone_angle: 0.75 # unused for regulation mode
+ obs_min_speed: 0.0 # unused for regulation mode
+ # Table E2
+ C_D_0: 0.043
+ C_D_alpha: 0.03
+ C_D_q: 0.0
+ C_D_delta_e: 0.0135
+ C_L_0: 0.23
+ C_L_alpha: 5.61
+ C_L_q: 7.95
+ C_L_delta_e: 0.13
+ C_M_0: 0.0135
+ C_M_alpha: -2.74
+ C_M_q: -38.21
+ C_M_delta_e: -0.99
+ C_Y_0: 0.0
+ C_Y_beta: -0.83
+ C_Y_p: 0.0
+ C_Y_r: 0.0
+ C_Y_delta_a: 0.075
+ C_Y_delta_r: 0.190
+ C_l_0: 0.0
+ C_l_beta: -0.130
+ C_l_p: -0.51
+ C_l_r: 0.25
+ C_l_delta_a: 0.17
+ C_l_delta_r: 0.0024
+ C_n_0: 0.0
+ C_n_beta: 0.073
+ C_n_p: -0.069
+ C_n_r: -0.095
+ C_n_delta_a: -0.011
+ C_n_delta_r: -0.069
+ # nonlinear aero model 
+ alpha_0: 0.47 # rad
+ M: 50.0
+ C_D_p: 0.25
+ oswald_eff: 0.9 # (??)
+ # special takeoff regime constraint 
+ alpha_takeoff: 0.47 # rad, same as alpha_0 (onset of stall)? 
+ beta_takeoff: 0.26 # deg
+ speed_takeoff: 5.0 # m/s
+ # aero clipping 
+ aero_scale : [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+ aero_clip : [
+  -1000000.0, -1000000.0, -1000000.0, -1000000.0, -1000000.0, -1000000.0, 
+   1000000.0,  1000000.0,  1000000.0,  1000000.0,  1000000.0,  1000000.0] 
+ ######### 
+ ud_mcts_num_points_per_dimension: 3 
+ #########
+ plot_max_num_trees: 20
+ plot_max_num_traj_per_tree: 1000
+ plot_max_num_points_per_traj: 10
+ #########
+ #########
+ model_device: "cpu" 
+ model_overfit_mode: False
+ model_training_mode: "None" # ["None", "spectral_normalization", "lipshitz_regularization"]
+ model_lipshitz_const: 0.005 # constraint for "spectral_normalization" mode, or lambda = 1 / model_lipshitz_const for regularization
+ model_train_test_ratio: 0.8
+ model_batch_size: 64
+ model_initial_learning_rate: 0.0001
+ model_num_epochs: 200
+ model_hidden_dim: 8
+ model_input_dim: 17 # 12 (state without time) + 4 (quadrotor inputs)
+ model_output_dim: 6
+ model_num_hidden_layers: 2
+ model_activation: "relu"
+ model_path: "../hardware/b2_neuralaero_model.pt"
