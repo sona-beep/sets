@@ -1,0 +1,122 @@
+{
+  "termination_reason": "planner_failed",
+  "planner_calls": 22,
+  "executed_steps": 125,
+  "targets_reached": 1,
+  "num_targets": 3,
+  "final_active_target": "valley_turn",
+  "final_plane_position": [
+    2105.3567688773355,
+    1108.2910029727063,
+    -4433.424819969046
+  ],
+  "final_missile_position": [
+    1294.5015356942122,
+    554.3547457399284,
+    -4400.6365603625745
+  ],
+  "final_distance_to_active_target": 913.8200620846897,
+  "final_distance_to_missile": 982.5510959871436,
+  "min_distance_to_missile": 982.5510959871436,
+  "min_distance_state_idx": 125,
+  "closest_approach_time": 12.5,
+  "cumulative_reward": 124.9631465574408,
+  "mean_step_reward": 0.9997051724595264,
+  "targets": [
+    {
+      "name": "ingress_gate",
+      "position": [
+        1400.0,
+        100.0,
+        -4900.0
+      ],
+      "radius": 520.0
+    },
+    {
+      "name": "valley_turn",
+      "position": [
+        2200.0,
+        200.0,
+        -4400.0
+      ],
+      "radius": 650.0
+    },
+    {
+      "name": "egress_point",
+      "position": [
+        2800.0,
+        0.0,
+        -4300.0
+      ],
+      "radius": 900.0
+    }
+  ],
+  "reached_targets": [
+    {
+      "name": "ingress_gate",
+      "index": 0,
+      "position": [
+        1400.0,
+        100.0,
+        -4900.0
+      ],
+      "step": 41,
+      "time": 4.1000000000000005,
+      "plane_position": [
+        915.0813156472243,
+        256.7523674708406,
+        -4981.148301476792
+      ]
+    }
+  ],
+  "obstacle_names": [
+    "ridge_1",
+    "ridge_2",
+    "ridge_3"
+  ],
+  "obstacles": [
+    [
+      [
+        2600.0,
+        3300.0
+      ],
+      [
+        500.0,
+        1050.0
+      ],
+      [
+        -5600.0,
+        -3950.0
+      ]
+    ],
+    [
+      [
+        3800.0,
+        4800.0
+      ],
+      [
+        -100.0,
+        600.0
+      ],
+      [
+        -5000.0,
+        -3400.0
+      ]
+    ],
+    [
+      [
+        5000.0,
+        5800.0
+      ],
+      [
+        800.0,
+        1600.0
+      ],
+      [
+        -4800.0,
+        -3200.0
+      ]
+    ]
+  ],
+  "output_dir": "/home/wdz/code/MCTS/sets/results/plane_missile_escape/plane_missile_escape_rollout_seed0_20260423_201140"
+}

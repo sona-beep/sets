@@ -266,9 +266,14 @@ Trajectory rollout_action_sequence(Eigen::VectorXd curr_state,
         traj.rs.push_back(r); 
         if (break_when_invalid && !is_valid) { break; }
     }
-    // todo: account for discount in sum 
-    traj.value = std::accumulate(traj.rs.begin(), traj.rs.end(), 0.0) / traj.xs.size();
-    // traj.value = std::accumulate(traj.rs.begin(), traj.rs.end(), 0.0);
+    const double gamma = mdp->gamma();
+    double discount = 1.0;
+    double discounted_sum = 0.0;
+    for (const double r : traj.rs) {
+        discounted_sum += discount * r;
+        discount *= gamma;
+    }
+    traj.value = discounted_sum / traj.xs.size();
     traj.is_valid = is_valid;
     return traj; 
 }

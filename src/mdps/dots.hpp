@@ -594,8 +594,11 @@ class DOTS : public MDP {
                 // spectrum and pinv
                 if (m_verbose) { std::cout << "spectrum..." << std::endl; }
                 Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigen_solver(cbd.C * cbd.C.transpose());
-                cbd.eigenVectors = eigen_solver.eigenvectors().rowwise().reverse(); 
-                cbd.eigenValues = eigen_solver.eigenvalues().reverse(); 
+                cbd.eigenVectors = eigen_solver.eigenvectors().rowwise().reverse();
+                cbd.eigenValues = eigen_solver.eigenvalues().reverse();
+                for (int ii=0; ii<cbd.eigenValues.rows(); ii++) {
+                    cbd.eigenValues(ii) = std::max(cbd.eigenValues(ii), 0.0);
+                }
 
                 if (m_verbose) { std::cout << "pinv..." << std::endl; }
                 // cbd.C_pinv = cbd.C.completeOrthogonalDecomposition().pseudoInverse(); // redo computation 

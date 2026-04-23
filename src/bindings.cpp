@@ -33,6 +33,8 @@ MDP* get_mdp(std::string mdp_name, std::string config_path) {
         mdp = new SixDOFAircraft(config_path);
     } else if (mdp_name == "GameSixDOFAircraft") {
         mdp = new GameSixDOFAircraft(config_path);
+    } else if (mdp_name == "GamePlaneMissileEscape") {
+        mdp = new GamePlaneMissileEscape(config_path);
     } else if (mdp_name == "PlaneMissileEscape") {
         mdp = new PlaneMissileEscape(config_path);
     } else {
