@@ -397,6 +397,31 @@ class DOTS : public MDP {
                 return false;
             }
 
+            if (branch_idx == 0 && m_empty_action_on) {
+                Eigen::MatrixXd U_direct = m_ground_mdp->U();
+                Eigen::VectorXd empty_u = m_ground_mdp->empty_control();
+                clip(empty_u, U_direct);
+
+                bool is_valid = true;
+                Eigen::VectorXd rollout_state = prev_state;
+                for (int kk=0; kk<m_dynamics_horizon; kk++) {
+                    rollout_state = m_ground_mdp->F(rollout_state, empty_u);
+                    sbd.xs[kk] = rollout_state;
+                    sbd.us[kk] = empty_u;
+                    sbd.us_ref[kk] = empty_u;
+                    sbd.rs[kk] = m_ground_mdp->R(rollout_state, empty_u);
+                    if (!m_ground_mdp->is_state_valid(rollout_state)) {
+                        is_valid = false;
+                        sbd.xs.resize(kk+1);
+                        sbd.us.resize(kk+1);
+                        sbd.us_ref.resize(kk+1);
+                        sbd.rs.resize(kk+1);
+                        break;
+                    }
+                }
+                return is_valid;
+            }
+
             // define state and input space 
             // Eigen::MatrixXd X = m_ground_mdp->X();
             Eigen::MatrixXd X = scale_cube(m_ground_mdp->X(), 0.95);
@@ -659,9 +684,7 @@ class DOTS : public MDP {
 
             // specific compute 
             if (m_verbose) { std::cout << "delta_z_H_unscaled..." << std::endl; }
-            if (branch_idx == 0 && m_empty_action_on) { ;
-                // do nothing, delta_z is zero, so control input will be empty 
-            } else if (branch_idx == 1 && m_equ_action_on) {
+            if (branch_idx == 1 && m_equ_action_on) {
                 Eigen::VectorXd z_H_des = Eigen::VectorXd::Zero(m_state_dim-1); 
                 z_H_des(0) = cbd.zbars[m_dynamics_horizon-1](0); // set x positions to zbar_H
                 z_H_des(1) = cbd.zbars[m_dynamics_horizon-1](1); // set y positions to zbar_H
@@ -701,7 +724,7 @@ class DOTS : public MDP {
 
                 // find closest target 
                 Eigen::VectorXd best_target = Eigen::VectorXd::Zero(13); 
-                double best_target_dist = 1000.0;
+                double best_target_dist = 1.0e100;
                 int num_targets = m_ground_mdp->get_xd().rows() / 13; 
                 for (int ii=0; ii<num_targets; ii++) {
                     Eigen::VectorXd target = m_ground_mdp->get_xd().segment(ii*13,13);

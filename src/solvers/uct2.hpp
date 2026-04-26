@@ -81,33 +81,9 @@ class UCT2 : public Solver {
                 // Permutation to break ties randomly.
                 perm = rng.permutation(node->children.size());
             } else if (m_heuristic == "sorted") {
-                // ordered list (by eigenvalue magnitude probably)
-                // std::iota(perm.begin(), perm.end(), 0);
-
-                // always try equllibrium action first 
-                perm = rng.permutation(node->children.size());
-                // std::vector<int> hold = perm;
-                int idx1;
-                int idx2;
-                int idx3;
-                for (int ii:perm) {
-                    if (perm[ii] == 1) {
-                        idx1 = ii;
-                    } else if (perm[ii] == 2) {
-                        idx2 = ii;
-                    } else if (perm[ii] == 3) {
-                        idx3 = ii;
-                    }
-                }
-                int hold1 = perm[2];
-                int hold2 = perm[0];
-                int hold3 = perm[1];
-                perm[0] = 2;
-                perm[1] = 3;
-                perm[2] = 1;
-                perm[idx1] = hold1;
-                perm[idx2] = hold2;
-                perm[idx3] = hold3;
+                // DOTS reserves low branch indices for special actions
+                // such as empty and greedy; try them before spectral pairs.
+                std::iota(perm.begin(), perm.end(), 0);
             }
 
             for (int ii : perm) {
@@ -146,7 +122,9 @@ class UCT2 : public Solver {
             double best_val = -1.0;
             std::vector<int> perm = rng.permutation(node->children.size());
             for (int ii : perm) {
-                if (node->children[ii] != nullptr) {
+                if (node->children[ii] != nullptr &&
+                        node->children[ii]->traj.is_valid &&
+                        node->children[ii]->num_visits > 0) {
                     double curr_val = node->children[ii]->total_value / node->children[ii]->num_visits;
                     if (curr_val > best_val) {
                         argmax = ii;

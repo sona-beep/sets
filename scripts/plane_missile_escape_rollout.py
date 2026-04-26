@@ -180,6 +180,12 @@ class ObstacleBox:
         plane = plane_position(state)
         return bool(((plane >= self.bounds[:, 0]) & (plane <= self.bounds[:, 1])).all())
 
+    def distance_to_plane(self, state):
+        plane = plane_position(state)
+        lower_violation = np.maximum(self.bounds[:, 0] - plane, 0.0)
+        upper_violation = np.maximum(plane - self.bounds[:, 1], 0.0)
+        return float(np.linalg.norm(lower_violation + upper_violation))
+
 
 class PlaneMissileEscapeRunner:
     def __init__(self, config_dict, config_path, seed=0, make_plots=True):
@@ -238,7 +244,10 @@ class PlaneMissileEscapeRunner:
 
     def _set_active_target(self):
         self.ground_mdp.clear_targets()
-        self.ground_mdp.add_target(self.active_target.position)
+        target_with_radius = np.concatenate(
+            (self.active_target.position, np.array([self.active_target.radius]))
+        )
+        self.ground_mdp.add_target(target_with_radius)
 
     def update_environment(self, curr_state):
         timestep = curr_state[self.ground_mdp.timestep_idx()]
@@ -279,10 +288,13 @@ class PlaneMissileEscapeRunner:
             )
 
     def mark_target_reached(self, summary, step_idx, state):
+        distance = plane_target_distance(state, self.active_target.position)
         reached = {
             "name": self.active_target.name,
             "index": self.active_target_idx,
             "position": self.active_target.position.copy(),
+            "radius": self.active_target.radius,
+            "distance": distance,
             "step": step_idx,
             "time": step_idx * self.control_step_duration,
             "plane_position": plane_position(state),
@@ -347,6 +359,7 @@ class PlaneMissileEscapeRunner:
         )
 
         curr_state = np.array(self.ground_mdp.initial_state(), dtype=float)
+        initial_missile_delta = missile_position(curr_state) - plane_position(curr_state)
         summary = {
             "termination_reason": "time_limit_reached",
             "rollout_xs": [curr_state.copy()],
@@ -363,6 +376,9 @@ class PlaneMissileEscapeRunner:
             "obstacle_names": [obstacle.name for obstacle in self.obstacles],
             "reached_targets": [],
             "target_switch_steps": [],
+            "initial_distance_to_first_target": plane_target_distance(curr_state, self.active_target.position),
+            "initial_distance_to_missile": plane_missile_distance(curr_state),
+            "initial_missile_relative_position": initial_missile_delta,
             "min_distance_to_missile": plane_missile_distance(curr_state),
             "min_distance_state_idx": 0,
             "closest_approach_time": 0.0,
@@ -437,10 +453,98 @@ class PlaneMissileEscapeRunner:
         summary["rollout_us"] = np.array(summary["rollout_us"], dtype=float)
         summary["rollout_rs"] = np.array(summary["rollout_rs"], dtype=float)
         summary["active_target_indices"] = np.array(summary["active_target_indices"], dtype=int)
+        summary["target_metrics"] = self.compute_target_metrics(summary)
+        summary["obstacle_metrics"] = self.compute_obstacle_metrics(summary)
         self.save_data(summary)
         if self.make_plots and self.config.get("visualize", True):
             MissionVisualizer(self.config, summary, self.output_dir).save_all()
         return summary
+
+    def compute_target_metrics(self, summary):
+        xs = summary["rollout_xs"]
+        active_target_indices = summary["active_target_indices"]
+        reached_by_index = {
+            int(reached["index"]): reached
+            for reached in summary["reached_targets"]
+        }
+
+        metrics = []
+        for idx, (name, target, radius) in enumerate(
+            zip(summary["target_names"], summary["targets"], summary["target_radii"])
+        ):
+            target = np.array(target, dtype=float)
+            distances = np.linalg.norm(xs[:, 0:3] - target, axis=1)
+            closest_idx = int(np.argmin(distances))
+
+            active_mask = active_target_indices == idx
+            active_indices = np.flatnonzero(active_mask)
+            if active_indices.size > 0:
+                active_distances = distances[active_indices]
+                closest_active_idx = int(active_indices[np.argmin(active_distances)])
+                min_active_distance = float(distances[closest_active_idx])
+                min_active_time = closest_active_idx * self.control_step_duration
+                min_active_position = plane_position(xs[closest_active_idx])
+            else:
+                closest_active_idx = None
+                min_active_distance = None
+                min_active_time = None
+                min_active_position = None
+
+            reached = reached_by_index.get(idx)
+            metrics.append(
+                {
+                    "name": name,
+                    "index": idx,
+                    "position": target,
+                    "radius": float(radius),
+                    "reached": reached is not None,
+                    "reached_step": None if reached is None else int(reached["step"]),
+                    "reached_time": None if reached is None else float(reached["time"]),
+                    "reached_distance": None if reached is None else float(reached["distance"]),
+                    "reached_position": None if reached is None else np.array(reached["plane_position"], dtype=float),
+                    "min_distance": float(distances[closest_idx]),
+                    "min_distance_step": closest_idx,
+                    "min_distance_time": closest_idx * self.control_step_duration,
+                    "min_distance_position": plane_position(xs[closest_idx]),
+                    "min_distance_during_active": min_active_distance,
+                    "min_distance_during_active_step": closest_active_idx,
+                    "min_distance_during_active_time": min_active_time,
+                    "min_distance_during_active_position": min_active_position,
+                }
+            )
+        return metrics
+
+    def compute_obstacle_metrics(self, summary):
+        xs = summary["rollout_xs"]
+        metrics = []
+        for idx, obstacle in enumerate(self.obstacles):
+            distances = np.array([obstacle.distance_to_plane(state) for state in xs], dtype=float)
+            closest_idx = int(np.argmin(distances))
+            metrics.append(
+                {
+                    "name": obstacle.name,
+                    "index": idx,
+                    "bounds": obstacle.bounds.copy(),
+                    "min_clearance": float(distances[closest_idx]),
+                    "min_clearance_step": closest_idx,
+                    "min_clearance_time": closest_idx * self.control_step_duration,
+                    "min_clearance_position": plane_position(xs[closest_idx]),
+                }
+            )
+        if len(metrics) > 0:
+            nearest = min(metrics, key=lambda item: item["min_clearance"])
+            summary["min_obstacle_clearance"] = nearest["min_clearance"]
+            summary["min_obstacle_clearance_name"] = nearest["name"]
+            summary["min_obstacle_clearance_step"] = nearest["min_clearance_step"]
+            summary["min_obstacle_clearance_time"] = nearest["min_clearance_time"]
+            summary["min_obstacle_clearance_position"] = nearest["min_clearance_position"]
+        else:
+            summary["min_obstacle_clearance"] = None
+            summary["min_obstacle_clearance_name"] = None
+            summary["min_obstacle_clearance_step"] = None
+            summary["min_obstacle_clearance_time"] = None
+            summary["min_obstacle_clearance_position"] = None
+        return metrics
 
     def save_data(self, summary):
         np.savez_compressed(
@@ -450,6 +554,7 @@ class PlaneMissileEscapeRunner:
             rollout_rs=summary["rollout_rs"],
             active_target_indices=summary["active_target_indices"],
             targets=np.array(summary["targets"], dtype=float),
+            target_radii=np.array(summary["target_radii"], dtype=float),
             obstacles=np.array(summary["obstacles"], dtype=float),
         )
 
@@ -470,10 +575,18 @@ class PlaneMissileEscapeRunner:
             "final_distance_to_active_target": plane_target_distance(
                 final_state, summary["targets"][final_target_idx]
             ),
+            "initial_distance_to_first_target": summary["initial_distance_to_first_target"],
+            "initial_distance_to_missile": summary["initial_distance_to_missile"],
+            "initial_missile_relative_position": summary["initial_missile_relative_position"],
             "final_distance_to_missile": plane_missile_distance(final_state),
             "min_distance_to_missile": summary["min_distance_to_missile"],
             "min_distance_state_idx": summary["min_distance_state_idx"],
             "closest_approach_time": summary["closest_approach_time"],
+            "min_obstacle_clearance": summary["min_obstacle_clearance"],
+            "min_obstacle_clearance_name": summary["min_obstacle_clearance_name"],
+            "min_obstacle_clearance_step": summary["min_obstacle_clearance_step"],
+            "min_obstacle_clearance_time": summary["min_obstacle_clearance_time"],
+            "min_obstacle_clearance_position": summary["min_obstacle_clearance_position"],
             "cumulative_reward": float(np.sum(summary["rollout_rs"])) if len(summary["rollout_rs"]) else 0.0,
             "mean_step_reward": float(np.mean(summary["rollout_rs"])) if len(summary["rollout_rs"]) else 0.0,
             "targets": [
@@ -489,6 +602,8 @@ class PlaneMissileEscapeRunner:
                 )
             ],
             "reached_targets": summary["reached_targets"],
+            "target_metrics": summary["target_metrics"],
+            "obstacle_metrics": summary["obstacle_metrics"],
             "obstacle_names": summary["obstacle_names"],
             "obstacles": summary["obstacles"],
             "output_dir": summary["output_dir"],
@@ -508,7 +623,9 @@ class MissionVisualizer:
         self.targets = np.array(summary["targets"], dtype=float)
         self.target_names = summary["target_names"]
         self.target_radii = np.array(summary["target_radii"], dtype=float)
+        self.target_metrics = summary.get("target_metrics", [])
         self.obstacles = np.array(summary["obstacles"], dtype=float)
+        self.obstacle_metrics = summary.get("obstacle_metrics", [])
         self.dt = config_dict["uct_dt"] * config_dict["ground_mdp_control_hold"]
 
     def save_all(self):
@@ -523,7 +640,9 @@ class MissionVisualizer:
         self.use_plot_style(plt)
         self.plot_trajectory_3d(plt)
         self.plot_topdown(plt)
+        self.plot_topdown(plt, filename="trajectory_topdown_zoom.png", zoom_to_mission=True)
         self.plot_distances(plt)
+        self.plot_obstacle_clearance(plt)
         self.plot_controls(plt)
         self.plot_states(plt)
         self.plot_spectral_branches(plt)
@@ -551,6 +670,36 @@ class MissionVisualizer:
             target_idx = min(int(target_indices[idx]), len(self.targets) - 1)
             distances.append(plane_target_distance(state, self.targets[target_idx]))
         return np.array(distances, dtype=float)
+
+    def current_target_radii(self):
+        target_indices = self.summary["active_target_indices"]
+        radii = []
+        for target_idx in target_indices:
+            safe_idx = min(int(target_idx), len(self.target_radii) - 1)
+            radii.append(self.target_radii[safe_idx])
+        return np.array(radii, dtype=float)
+
+    def target_distances(self, target_idx):
+        target = self.targets[target_idx]
+        return np.linalg.norm(self.xs[:, 0:3] - target, axis=1)
+
+    def target_metric(self, target_idx):
+        for metric in self.target_metrics:
+            if int(metric["index"]) == target_idx:
+                return metric
+        return None
+
+    def obstacle_clearance(self, obstacle):
+        plane = self.xs[:, 0:3]
+        lower_violation = np.maximum(obstacle[:, 0] - plane, 0.0)
+        upper_violation = np.maximum(plane - obstacle[:, 1], 0.0)
+        return np.linalg.norm(lower_violation + upper_violation, axis=1)
+
+    def obstacle_metric(self, obstacle_idx):
+        for metric in self.obstacle_metrics:
+            if int(metric["index"]) == obstacle_idx:
+                return metric
+        return None
 
     def plot_trajectory_3d(self, plt):
         from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -583,12 +732,44 @@ class MissionVisualizer:
         fig.savefig(self.output_dir / "trajectory_3d.png")
         plt.close(fig)
 
-    def plot_topdown(self, plt):
+    def mission_xy_limits(self):
+        xy_points = [self.xs[:, 0:2], self.targets[:, 0:2]]
+        for obstacle in self.obstacles:
+            corners = np.array(
+                [
+                    [obstacle[0, 0], obstacle[1, 0]],
+                    [obstacle[0, 0], obstacle[1, 1]],
+                    [obstacle[0, 1], obstacle[1, 0]],
+                    [obstacle[0, 1], obstacle[1, 1]],
+                ],
+                dtype=float,
+            )
+            xy_points.append(corners)
+
+        all_xy = np.vstack(xy_points)
+        x_min, y_min = np.min(all_xy, axis=0)
+        x_max, y_max = np.max(all_xy, axis=0)
+        target_pad = float(np.max(self.target_radii)) if self.target_radii.size else 0.0
+        pad_x = 0.08 * max(x_max - x_min, 1.0) + max(60.0, 0.4 * target_pad)
+        pad_y = 0.12 * max(y_max - y_min, 1.0) + max(80.0, 0.8 * target_pad)
+        return (x_min - pad_x, x_max + pad_x), (y_min - pad_y, y_max + pad_y)
+
+    def plot_topdown(self, plt, filename="trajectory_topdown.png", zoom_to_mission=False):
         fig, ax = plt.subplots(figsize=(11, 8), dpi=150)
         plane = self.xs[:, 0:3]
         missile = self.xs[:, 6:9]
         ax.plot(plane[:, 0], plane[:, 1], color="#0B3954", linewidth=2.5, label="aircraft")
         ax.plot(missile[:, 0], missile[:, 1], color="#B23A48", linewidth=2.0, label="missile")
+        if len(self.targets) > 1:
+            ax.plot(
+                self.targets[:, 0],
+                self.targets[:, 1],
+                color="#2A9D8F",
+                linestyle=":",
+                linewidth=1.2,
+                alpha=0.75,
+                label="target order",
+            )
         ax.scatter(plane[0, 0], plane[0, 1], color="#0B3954", s=55)
         ax.scatter(missile[0, 0], missile[0, 1], color="#B23A48", s=55, marker="^")
 
@@ -604,6 +785,38 @@ class MissionVisualizer:
             ax.add_patch(circle)
             ax.scatter(target[0], target[1], color="#2A9D8F", s=85, marker="*")
             ax.text(target[0], target[1], f" {idx + 1}:{self.target_names[idx]}", color="#1B6F67")
+            metric = self.target_metric(idx)
+            if metric is not None:
+                closest = np.array(metric["min_distance_position"], dtype=float)
+                ax.scatter(
+                    closest[0],
+                    closest[1],
+                    color="#264653",
+                    marker="x",
+                    s=50,
+                    linewidth=1.4,
+                    label="closest-to-target point" if idx == 0 else None,
+                )
+                ax.plot(
+                    [target[0], closest[0]],
+                    [target[1], closest[1]],
+                    color="#264653",
+                    linestyle="--",
+                    linewidth=0.8,
+                    alpha=0.55,
+                )
+                if metric["reached"]:
+                    reached = np.array(metric["reached_position"], dtype=float)
+                    ax.scatter(
+                        reached[0],
+                        reached[1],
+                        color="#2A9D8F",
+                        marker="D",
+                        s=45,
+                        edgecolor="white",
+                        linewidth=0.7,
+                        label="accepted visit point" if idx == 0 else None,
+                    )
 
         for obstacle in self.obstacles:
             width = obstacle[0, 1] - obstacle[0, 0]
@@ -619,25 +832,53 @@ class MissionVisualizer:
             )
             ax.add_patch(rect)
 
+        for idx, obstacle in enumerate(self.obstacles):
+            metric = self.obstacle_metric(idx)
+            if metric is None:
+                continue
+            closest = np.array(metric["min_clearance_position"], dtype=float)
+            ax.scatter(
+                closest[0],
+                closest[1],
+                color="#E76F51",
+                marker="x",
+                s=55,
+                linewidth=1.5,
+                label="closest-to-obstacle point" if idx == 0 else None,
+            )
+
         ax.set_aspect("equal", adjustable="box")
+        if zoom_to_mission:
+            (x_min, x_max), (y_min, y_max) = self.mission_xy_limits()
+            ax.set_xlim(x_min, x_max)
+            ax.set_ylim(y_min, y_max)
         ax.set_xlabel("x [m]")
         ax.set_ylabel("y [m]")
-        ax.set_title("Top-Down Mission Geometry")
+        ax.set_title("Top-Down Mission Geometry" if not zoom_to_mission else "Top-Down Mission Geometry (Zoomed)")
         ax.legend(loc="best")
         fig.tight_layout()
-        fig.savefig(self.output_dir / "trajectory_topdown.png")
+        fig.savefig(self.output_dir / filename)
         plt.close(fig)
 
     def plot_distances(self, plt):
         times = self.state_times()
         d_target = self.current_target_distances()
+        active_radii = self.current_target_radii()
         d_missile = np.array([plane_missile_distance(state) for state in self.xs])
 
         fig, ax = plt.subplots(figsize=(11, 5), dpi=150)
         ax.plot(times, d_target, color="#2A9D8F", linewidth=2.0, label="distance to active target")
+        ax.step(times, active_radii, where="post", color="#2A9D8F", linestyle="--", linewidth=1.1, label="active target radius")
+        for idx in range(len(self.targets)):
+            ax.plot(
+                times,
+                self.target_distances(idx),
+                linewidth=0.85,
+                alpha=0.35,
+                label=f"distance to target {idx + 1}",
+            )
         ax.plot(times, d_missile, color="#B23A48", linewidth=2.0, label="distance to missile")
         ax.axhline(self.config["missile_capture_radius"], color="#B23A48", linestyle="--", linewidth=1.0, label="missile hit radius")
-        ax.axhline(self.config["target_success_radius"], color="#2A9D8F", linestyle="--", linewidth=1.0, label="target radius")
         ax.scatter(
             [self.summary["closest_approach_time"]],
             [self.summary["min_distance_to_missile"]],
@@ -646,12 +887,50 @@ class MissionVisualizer:
             zorder=4,
             label="closest approach",
         )
+        for metric in self.target_metrics:
+            if metric["reached"]:
+                ax.scatter(
+                    [metric["reached_time"]],
+                    [metric["reached_distance"]],
+                    color="#2A9D8F",
+                    s=42,
+                    marker="D",
+                    zorder=5,
+                )
+        for switch_step in self.summary["target_switch_steps"]:
+            ax.axvline(switch_step * self.dt, color="0.35", linestyle=":", linewidth=0.9, alpha=0.55)
         ax.set_xlabel("time [s]")
         ax.set_ylabel("distance [m]")
         ax.set_title("Target Progress And Missile Separation")
         ax.legend(loc="best")
         fig.tight_layout()
         fig.savefig(self.output_dir / "distances.png")
+        plt.close(fig)
+
+    def plot_obstacle_clearance(self, plt):
+        if self.obstacles.size == 0:
+            return
+
+        times = self.state_times()
+        fig, ax = plt.subplots(figsize=(11, 5), dpi=150)
+        nearest = None
+        for idx, obstacle in enumerate(self.obstacles):
+            clearance = self.obstacle_clearance(obstacle)
+            if nearest is None:
+                nearest = clearance.copy()
+            else:
+                nearest = np.minimum(nearest, clearance)
+            label = self.summary["obstacle_names"][idx] if idx < len(self.summary["obstacle_names"]) else f"obstacle {idx + 1}"
+            ax.plot(times, clearance, linewidth=1.2, alpha=0.45, label=label)
+
+        ax.plot(times, nearest, color="#E76F51", linewidth=2.2, label="nearest obstacle clearance")
+        ax.axhline(0.0, color="#9C2F1B", linestyle="--", linewidth=1.0, label="collision boundary")
+        ax.set_xlabel("time [s]")
+        ax.set_ylabel("clearance [m]")
+        ax.set_title("Obstacle Clearance")
+        ax.legend(loc="best")
+        fig.tight_layout()
+        fig.savefig(self.output_dir / "obstacle_clearance.png")
         plt.close(fig)
 
     def plot_controls(self, plt):
@@ -721,6 +1000,15 @@ class MissionVisualizer:
                 plotted += 1
 
         for idx, target in enumerate(self.targets):
+            circle = plt.Circle(
+                (target[0], target[1]),
+                self.target_radii[idx],
+                color="#2A9D8F",
+                fill=False,
+                linewidth=1.0,
+                alpha=0.45,
+            )
+            ax.add_patch(circle)
             ax.scatter(target[0], target[1], color="#2A9D8F", s=85, marker="*")
             ax.text(target[0], target[1], f" {idx + 1}:{self.target_names[idx]}", color="#1B6F67")
 
@@ -735,6 +1023,21 @@ class MissionVisualizer:
                 linewidth=1.2,
             )
             ax.add_patch(rect)
+
+        for idx, obstacle in enumerate(self.obstacles):
+            metric = self.obstacle_metric(idx)
+            if metric is None:
+                continue
+            closest = np.array(metric["min_clearance_position"], dtype=float)
+            ax.scatter(
+                closest[0],
+                closest[1],
+                color="#E76F51",
+                marker="x",
+                s=55,
+                linewidth=1.5,
+                label="closest-to-obstacle point" if idx == 0 else None,
+            )
 
         ax.set_aspect("equal", adjustable="box")
         ax.set_xlabel("x [m]")
@@ -799,6 +1102,9 @@ def print_final_summary(summary):
     print("planner_calls:", summary["planner_calls"])
     print("executed_steps:", len(summary["rollout_us"]))
     print("targets_reached:", len(summary["reached_targets"]), "/", len(summary["targets"]))
+    print("initial_distance_to_first_target:", np.round(summary["initial_distance_to_first_target"], 3))
+    print("initial_distance_to_missile:", np.round(summary["initial_distance_to_missile"], 3))
+    print("initial_missile_relative_position:", np.round(summary["initial_missile_relative_position"], 3))
     print("final_active_target:", summary["target_names"][final_target_idx])
     print("final_plane_position:", np.round(plane_position(final_state), 3))
     print("final_missile_position:", np.round(missile_position(final_state), 3))
@@ -807,6 +1113,41 @@ def print_final_summary(summary):
     print("min_distance_to_missile:", np.round(summary["min_distance_to_missile"], 3))
     print("min_distance_state_idx:", summary["min_distance_state_idx"])
     print("closest_approach_time:", np.round(summary["closest_approach_time"], 3))
+    print("min_obstacle_clearance:", summary.get("min_obstacle_clearance"))
+    print("min_obstacle_clearance_name:", summary.get("min_obstacle_clearance_name"))
+    print("target_metrics:")
+    for metric in summary.get("target_metrics", []):
+        print(
+            "  target[{idx}] {name}: reached={reached} radius={radius:.1f} "
+            "reached_dist={reached_dist} min_dist={min_dist:.3f} "
+            "active_min_dist={active_min_dist}".format(
+                idx=metric["index"],
+                name=metric["name"],
+                reached=metric["reached"],
+                radius=metric["radius"],
+                reached_dist=(
+                    "None"
+                    if metric["reached_distance"] is None
+                    else "{:.3f}".format(metric["reached_distance"])
+                ),
+                min_dist=metric["min_distance"],
+                active_min_dist=(
+                    "None"
+                    if metric["min_distance_during_active"] is None
+                    else "{:.3f}".format(metric["min_distance_during_active"])
+                ),
+            )
+        )
+    print("obstacle_metrics:")
+    for metric in summary.get("obstacle_metrics", []):
+        print(
+            "  obstacle[{idx}] {name}: min_clearance={clearance:.3f} at_step={step}".format(
+                idx=metric["index"],
+                name=metric["name"],
+                clearance=metric["min_clearance"],
+                step=metric["min_clearance_step"],
+            )
+        )
     print("output_dir:", summary["output_dir"])
     if len(summary["rollout_rs"]) > 0:
         print("cumulative_reward:", np.round(np.sum(summary["rollout_rs"]), 4))

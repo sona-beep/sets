@@ -83,11 +83,14 @@ class GamePlaneMissileEscape : public MDP {
             m_reward_escape_weight = node_value_or<double>(config, "reward_escape_weight", 0.40);
             m_reward_danger_weight = node_value_or<double>(config, "reward_danger_weight", 0.30);
             m_reward_heading_weight = node_value_or<double>(config, "reward_heading_weight", 0.10);
+            m_reward_precision_weight = node_value_or<double>(config, "reward_precision_weight", 0.0);
             m_reward_control_weight = node_value_or<double>(config, "reward_control_weight", 0.0);
             m_target_distance_scale = node_value_or<double>(config, "target_distance_scale", 2000.0);
+            m_target_precision_scale = node_value_or<double>(config, "target_precision_scale", 0.0);
             m_missile_distance_scale = node_value_or<double>(config, "missile_distance_scale", 1200.0);
             m_missile_danger_scale = node_value_or<double>(config, "missile_danger_scale", 300.0);
             m_target_success_radius = node_value_or<double>(config, "target_success_radius", 150.0);
+            m_default_target_success_radius = m_target_success_radius;
             m_target_success_bonus = node_value_or<double>(config, "target_success_bonus", 1.0);
             m_missile_hit_penalty = node_value_or<double>(config, "missile_hit_penalty", 2.0);
             m_capture_radius = node_value_or<double>(config, "missile_capture_radius", 80.0);
@@ -218,11 +221,16 @@ class GamePlaneMissileEscape : public MDP {
         void add_target(Eigen::VectorXd target) override {
             if (target.size() >= 3) {
                 m_target_position = target.segment(0, 3);
+                m_xd.segment(0, 3) = m_target_position.head(3);
+                m_target_success_radius = target.size() >= 4
+                    ? std::max(target(3), 1.0)
+                    : m_default_target_success_radius;
             }
         }
 
         void clear_targets() override {
             m_target_position = m_default_target_position;
+            m_target_success_radius = m_default_target_success_radius;
         }
 
         void add_thermal(Eigen::MatrixXd X_thermal, Eigen::VectorXd V_thermal) override {
@@ -289,6 +297,9 @@ class GamePlaneMissileEscape : public MDP {
             const double reward_alive = 1.0;
             const double reward_target =
                 std::exp(-distance_to_target / std::max(m_target_distance_scale, 1.0));
+            const double precision_scale = target_precision_scale();
+            const double reward_precision =
+                std::exp(-std::pow(distance_to_target / precision_scale, 2.0));
             const double reward_escape =
                 std::tanh(missile_margin / std::max(m_missile_distance_scale, 1.0));
             const double reward_danger =
@@ -309,6 +320,7 @@ class GamePlaneMissileEscape : public MDP {
             double reward = 0.0;
             reward += m_reward_alive_weight * reward_alive;
             reward += m_reward_target_weight * reward_target;
+            reward += m_reward_precision_weight * reward_precision;
             reward += m_reward_escape_weight * reward_escape;
             reward -= m_reward_danger_weight * reward_danger;
             reward += m_reward_heading_weight * reward_heading;
@@ -324,6 +336,7 @@ class GamePlaneMissileEscape : public MDP {
             if (verbose) {
                 std::cout << "reward_alive: " << reward_alive << std::endl;
                 std::cout << "reward_target: " << reward_target << std::endl;
+                std::cout << "reward_precision: " << reward_precision << std::endl;
                 std::cout << "reward_escape: " << reward_escape << std::endl;
                 std::cout << "reward_danger: " << reward_danger << std::endl;
                 std::cout << "reward_heading: " << reward_heading << std::endl;
@@ -446,6 +459,13 @@ class GamePlaneMissileEscape : public MDP {
             return std::max(lower, std::min(value, upper));
         }
 
+        double target_precision_scale() const {
+            if (m_target_precision_scale > 0.0) {
+                return std::max(m_target_precision_scale, 1.0);
+            }
+            return std::max(m_target_success_radius, 1.0);
+        }
+
         Eigen::VectorXd clip_action(const Eigen::VectorXd &action) const {
             Eigen::VectorXd clipped = action;
             for (int ii = 0; ii < m_action_dim; ++ii) {
@@ -515,11 +535,14 @@ class GamePlaneMissileEscape : public MDP {
         double m_reward_escape_weight = 0.40;
         double m_reward_danger_weight = 0.30;
         double m_reward_heading_weight = 0.10;
+        double m_reward_precision_weight = 0.0;
         double m_reward_control_weight = 0.0;
         double m_target_distance_scale = 2000.0;
+        double m_target_precision_scale = 0.0;
         double m_missile_distance_scale = 1200.0;
         double m_missile_danger_scale = 300.0;
         double m_target_success_radius = 150.0;
+        double m_default_target_success_radius = 150.0;
         double m_target_success_bonus = 1.0;
         double m_missile_hit_penalty = 2.0;
         double m_capture_radius = 80.0;

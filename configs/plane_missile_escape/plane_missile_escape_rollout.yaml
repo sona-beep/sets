@@ -18,30 +18,41 @@ ground_mdp_control_labels: ["alpha", "gamma", "throttle"]
 ground_mdp_dt: 0.02
 ground_mdp_control_hold: 5
 ground_mdp_gamma: 1.0
-ground_mdp_H: 650
+ground_mdp_H: 850
 ground_mdp_V_alive: 0.0
 
 ground_mdp_x0: [
-  0.0, 0.0, -5000.0, 270.0, 0.04, 0.00,
-  -5200.0, -3600.0, -4300.0, 600.0, 0.02, 0.42,
+  0.0, 0.0, -5000.0, 320.0, 0.02, 0.00,
+  -1650.0, 150.0, -4000.0, 620.0, 0.00, -0.42,
   0.0
 ]
 ground_mdp_xd: [
-  1400.0, 100.0, -4900.0, 280.0, 0.00, 0.00,
+  1230.0, -50.0, -5030.0, 320.0, 0.00, 0.00,
   0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
   0.0
 ]
-target_position: [1400.0, 100.0, -4900.0]
+target_position: [1230.0, -50.0, -5030.0]
+# mission_targets:
+#   - name: "ingress_gate"
+#     position: [1230.0, -50.0, -5030.0]
+#     radius: 100.0
+#   - name: "mid_offset"
+#     position: [1710.0, 55.0, -5050.0]
+#     radius: 100.0
+#   - name: "egress_point"
+#     position: [2190.0, 120.0, -5070.0]
+#     radius: 100.0
+
 mission_targets:
   - name: "ingress_gate"
-    position: [1400.0, 100.0, -4900.0]
-    radius: 520.0
-  - name: "valley_turn"
-    position: [2200.0, 200.0, -4400.0]
-    radius: 650.0
+    position: [1230.0, -50.0, -6030.0]
+    radius: 100.0
+  - name: "mid_offset"
+    position: [1710.0, 55.0, -5550.0]
+    radius: 100.0
   - name: "egress_point"
-    position: [2800.0, 0.0, -4300.0]
-    radius: 900.0
+    position: [2190.0, 120.0, -6070.0]
+    radius: 100.0
 
 ground_mdp_X: [
   -12000.0, -12000.0, -10000.0, 150.0, -1.2, -3.1415926,
@@ -64,27 +75,27 @@ ground_mdp_Qf: [5.0, 5.0, 5.0, 0.1, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 ground_mdp_obstacles: []
 ground_mdp_special_obstacle_idxs: []
 ground_mdp_special_obstacle_radius: 0.0
-obstacle_boxes:
-  - name: "ridge_1"
-    bounds: [2600.0, 3300.0, 500.0, 1050.0, -5600.0, -3950.0]
-  - name: "ridge_2"
-    bounds: [3800.0, 4800.0, -100.0, 600.0, -5000.0, -3400.0]
-  - name: "ridge_3"
-    bounds: [5000.0, 5800.0, 800.0, 1600.0, -4800.0, -3200.0]
+# obstacle_boxes:
+#   - name: "reference_style_ridge"
+#     bounds: [1260.0, 1560.0, 70.0, 200.0, -5300.0, -4900.0]
+#   - name: "southern_keepout"
+#     bounds: [940.0, 1240.0, -220.0, -90.0, -5200.0, -4900.0]
 
 reward_alive_weight: 0.05
-reward_target_weight: 0.85
-reward_escape_weight: 0.25
-reward_danger_weight: 0.25
-reward_heading_weight: 0.25
-reward_control_weight: 0.0015
-target_distance_scale: 3200.0
+reward_target_weight: 1.36
+reward_precision_weight: 0.95
+reward_escape_weight: 0.28
+reward_danger_weight: 0.38
+reward_heading_weight: 0.54
+reward_control_weight: 0.0010
+target_distance_scale: 1400.0
+target_precision_scale: 186.0
 missile_distance_scale: 4800.0
 missile_danger_scale: 1800.0
-target_success_radius: 520.0
-target_success_bonus: 3.0
-missile_hit_penalty: 4.0
-missile_capture_radius: 120.0
+target_success_radius: 188.0
+target_success_bonus: 8.0
+missile_hit_penalty: 8.0
+missile_capture_radius: 200.0
 
 gravity: 9.8
 aircraft_mass: 13680.0
@@ -100,33 +111,33 @@ aircraft_lift_alpha: 0.1369
 aircraft_normal_bias: 0.1310
 aircraft_normal_alpha: 3.0825
 
-missile_speed_command: 620.0
-missile_speed_response: 1.2
+missile_speed_command: 610.0
+missile_speed_response: 1.1
 missile_min_speed: 250.0
 missile_max_speed: 1400.0
-missile_turn_gain: 3.0
+missile_turn_gain: 1.8
 missile_max_pitch_rate: 0.9
 missile_max_yaw_rate: 1.1
 missile_max_pitch: 1.3
 missile_lead_gain: 0.75
-missile_navigation_constant: 4.5
+missile_navigation_constant: 3.3
 missile_guidance_lookahead: 1.0
 missile_alignment_gain: 0.35
 
 dots_expansion_mode: "SpectralSearch"
 dots_initialize_mode: "empty_control"
-dots_special_actions: ["empty"]
-dots_num_branches: 18
+dots_special_actions: ["empty", "greedy"]
+dots_num_branches: 22
 dots_decision_making_horizon: 20
 dots_dynamics_horizon: 10
 dots_spectral_branches_mode: "my_idxs"
-my_idxs: [0, 1, 2, 3, 4, 5]
+my_idxs: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 dots_control_mode: "closed_loop_discrete"
 dots_scale_mode: "displacement_clip"
 dots_modal_damping_mode: "damp_displacement_between_systems"
 dots_modal_damping_gains: [0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55]
 dots_rho: [1.0, 1.0, 1.0, 0.8, 0.8, 0.8, 0.4, 0.4, 0.4, 0.2, 0.2, 0.2]
-dots_greedy_gain: 0.0
+dots_greedy_gain: 0.8
 dots_greedy_rate: 0.75
 dots_greedy_min_dist: 0.15
 dots_baseline_mode_on: false
@@ -135,23 +146,23 @@ dots_verbose: false
 
 uct_mode: "no_cbds"
 uct_downsample_traj_on: false
-uct_N: 320
-uct_max_depth: 6
+uct_N: 540
+uct_max_depth: 8
 uct_mpc_depth: 1
 uct_c: 3.0
 uct_dt: 0.02
-uct_wct: 0.8
+uct_wct: 2.8
 uct_export_topology: false
 uct_export_node_states: false
 uct_export_trajs: true
 uct_export_cbdsbds: false
 uct_export_tree_statistics: false
-uct_heuristic_mode: "shuffled"
+uct_heuristic_mode: "sorted"
 uct_tree_exploration: "puct"
 uct_verbose: false
 
-closed_loop_execute_steps: 6
-closed_loop_max_steps: 65
+closed_loop_execute_steps: 1
+closed_loop_max_steps: 186
 
 visualize: true
 output_dir: "results/plane_missile_escape"
